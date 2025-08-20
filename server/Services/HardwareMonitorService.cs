@@ -43,6 +43,34 @@ public class HardwareMonitorService : IDisposable
         _computer.Accept(_visitor);
         var metrics = new SystemMetrics();
 
+        double totalVirtualKb = 0;
+        double freeVirtualKb = 0;
+        double totalSwapKb = 0;
+        double freeSwapKb = 0;
+        try
+        {
+            using var searcher = new ManagementObjectSearcher("select TotalVirtualMemorySize, FreeVirtualMemory, TotalSwapSpaceSize, FreeSpaceInPagingFiles, SizeStoredInPagingFiles from Win32_OperatingSystem");
+            foreach (var mo in searcher.Get())
+            {
+                totalVirtualKb = Convert.ToDouble(mo["TotalVirtualMemorySize"]);
+                freeVirtualKb = Convert.ToDouble(mo["FreeVirtualMemory"]);
+                totalSwapKb = Convert.ToDouble(mo["TotalSwapSpaceSize"]);
+                if (totalSwapKb <= 0)
+                    totalSwapKb = Convert.ToDouble(mo["SizeStoredInPagingFiles"]);
+                freeSwapKb = Convert.ToDouble(mo["FreeSpaceInPagingFiles"]);
+                break;
+            }
+        }
+        catch { }
+
+        double cacheBytes = 0;
+        try
+        {
+            using var cacheCounter = new PerformanceCounter("Memory", "Cache Bytes");
+            cacheBytes = cacheCounter.NextValue();
+        }
+        catch { }
+
         foreach (var hardware in _computer.Hardware)
         {
             hardware.Accept(_visitor);
@@ -148,6 +176,8 @@ public class HardwareMonitorService : IDisposable
         if (processElapsed <= 0) processElapsed = 1;
         var processes = Process.GetProcesses();
         var procInfos = new List<ProcessInfo>();
+        var memProcInfos = new List<MemoryProcess>();
+        long appBytes = 0;
         foreach (var proc in processes)
         {
             try
@@ -155,8 +185,16 @@ public class HardwareMonitorService : IDisposable
                 var total = proc.TotalProcessorTime;
                 var prev = _processSnapshot.TryGetValue(proc.Id, out var ts) ? ts : TimeSpan.Zero;
                 var cpu = ((total - prev).TotalMilliseconds / (processElapsed * 1000 * Environment.ProcessorCount)) * 100;
-                var mem = proc.WorkingSet64 / 1024d / 1024d;
-                procInfos.Add(new ProcessInfo { Name = proc.ProcessName, Pid = proc.Id, Usage = cpu, Memory = mem });
+                var memBytes = proc.WorkingSet64;
+                var memMb = memBytes / 1024d / 1024d;
+                procInfos.Add(new ProcessInfo { Name = proc.ProcessName, Pid = proc.Id, Usage = cpu, Memory = memMb });
+                memProcInfos.Add(new MemoryProcess
+                {
+                    Name = proc.ProcessName,
+                    Memory = memBytes / 1024d / 1024d / 1024d,
+                    Type = proc.SessionId == 0 ? "System" : "Application"
+                });
+                appBytes += memBytes;
                 _processSnapshot[proc.Id] = total;
             }
             catch { }
@@ -164,8 +202,53 @@ public class HardwareMonitorService : IDisposable
         var dead = _processSnapshot.Keys.Except(processes.Select(p => p.Id)).ToList();
         foreach (var d in dead) _processSnapshot.Remove(d);
         metrics.TopProcesses = procInfos.OrderByDescending(p => p.Usage).Take(5).ToList();
+        metrics.TopMemoryProcesses = memProcInfos.OrderByDescending(p => p.Memory).Take(5).ToList();
         _lastProcessSample = now;
         metrics.Processes = processes.Length;
+
+        // Detailed memory stats
+        var physicalTotalGb = metrics.Memory.Total;
+        var physicalFreeGb = metrics.Memory.Available;
+        var physicalUsedGb = physicalTotalGb - physicalFreeGb;
+        metrics.Memory.Physical = new MemoryDetail { Total = physicalTotalGb, Used = physicalUsedGb, Percentage = metrics.Memory.Usage };
+
+        var virtualTotalGb = totalVirtualKb / 1024 / 1024;
+        var virtualFreeGb = freeVirtualKb / 1024 / 1024;
+        metrics.Memory.Virtual = new MemoryDetail
+        {
+            Total = virtualTotalGb,
+            Used = virtualTotalGb - virtualFreeGb,
+            Percentage = virtualTotalGb > 0 ? (virtualTotalGb - virtualFreeGb) / virtualTotalGb * 100 : 0
+        };
+
+        var cacheGb = cacheBytes / 1024 / 1024 / 1024;
+        metrics.Memory.Cache = new MemoryDetail
+        {
+            Total = physicalTotalGb,
+            Used = cacheGb,
+            Percentage = physicalTotalGb > 0 ? cacheGb / physicalTotalGb * 100 : 0
+        };
+
+        var swapTotalGb = totalSwapKb / 1024 / 1024;
+        var swapFreeGb = freeSwapKb / 1024 / 1024;
+        metrics.Memory.Swap = new MemoryDetail
+        {
+            Total = swapTotalGb,
+            Used = swapTotalGb - swapFreeGb,
+            Percentage = swapTotalGb > 0 ? (swapTotalGb - swapFreeGb) / swapTotalGb * 100 : 0
+        };
+
+        var totalPhysBytes = physicalTotalGb * 1024 * 1024 * 1024;
+        var cacheBytesTotal = cacheGb * 1024 * 1024 * 1024;
+        var freeBytes = physicalFreeGb * 1024 * 1024 * 1024;
+        var systemBytes = Math.Max(totalPhysBytes - (appBytes + cacheBytesTotal + freeBytes), 0);
+        metrics.MemoryDistribution = new MemoryDistribution
+        {
+            Applications = totalPhysBytes > 0 ? appBytes / totalPhysBytes * 100 : 0,
+            System = totalPhysBytes > 0 ? systemBytes / totalPhysBytes * 100 : 0,
+            Cache = totalPhysBytes > 0 ? cacheBytesTotal / totalPhysBytes * 100 : 0,
+            Free = totalPhysBytes > 0 ? freeBytes / totalPhysBytes * 100 : 0
+        };
 
         // History
         void Enqueue(Queue<double> q, double v)

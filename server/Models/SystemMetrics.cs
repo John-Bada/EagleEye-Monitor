@@ -10,6 +10,8 @@ public class SystemMetrics
     public NetworkMetrics Network { get; set; } = new();
     public GpuMetrics Gpu { get; set; } = new();
     public List<ProcessInfo> TopProcesses { get; set; } = new();
+    public List<MemoryProcess> TopMemoryProcesses { get; set; } = new();
+    public MemoryDistribution MemoryDistribution { get; set; } = new();
     public PerformanceHistory History { get; set; } = new();
     public int Processes { get; set; }
     public DateTime Timestamp { get; set; } = DateTime.UtcNow;
@@ -37,6 +39,10 @@ public class MemoryMetrics
     public double Usage { get; set; }
     public double Total { get; set; }
     public double Available { get; set; }
+    public MemoryDetail Physical { get; set; } = new();
+    public MemoryDetail Virtual { get; set; } = new();
+    public MemoryDetail Cache { get; set; } = new();
+    public MemoryDetail Swap { get; set; } = new();
 }
 
 public class DiskMetrics
@@ -65,6 +71,28 @@ public class ProcessInfo
     public int Pid { get; set; }
     public double Usage { get; set; }
     public double Memory { get; set; }
+}
+
+public class MemoryProcess
+{
+    public string Name { get; set; } = string.Empty;
+    public double Memory { get; set; }
+    public string Type { get; set; } = string.Empty;
+}
+
+public class MemoryDetail
+{
+    public double Used { get; set; }
+    public double Total { get; set; }
+    public double Percentage { get; set; }
+}
+
+public class MemoryDistribution
+{
+    public double Applications { get; set; }
+    public double System { get; set; }
+    public double Cache { get; set; }
+    public double Free { get; set; }
 }
 
 public class PerformanceHistory
