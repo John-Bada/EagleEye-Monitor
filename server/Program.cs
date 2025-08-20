@@ -6,6 +6,13 @@ var builder = WebApplication.CreateBuilder(args);
 // Services
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<HardwareMonitorService>();
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(policy =>
+        policy.AllowAnyHeader()
+              .AllowAnyMethod()
+              .AllowAnyOrigin());
+});
 
 // API Docs
 builder.Services.AddEndpointsApiExplorer();
@@ -19,10 +26,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseCors(policy => policy
-    .AllowAnyHeader()
-    .AllowAnyMethod()
-    .AllowAnyOrigin());
+app.UseCors();
 
 app.MapHub<MetricsHub>("/hubs/metrics");
 
