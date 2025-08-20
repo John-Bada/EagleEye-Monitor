@@ -47,29 +47,33 @@ public class HardwareMonitorService : IDisposable
         double freeVirtualKb = 0;
         double totalSwapKb = 0;
         double freeSwapKb = 0;
-        try
-        {
-            using var searcher = new ManagementObjectSearcher("select TotalVirtualMemorySize, FreeVirtualMemory, TotalSwapSpaceSize, FreeSpaceInPagingFiles, SizeStoredInPagingFiles from Win32_OperatingSystem");
-            foreach (var mo in searcher.Get())
-            {
-                totalVirtualKb = Convert.ToDouble(mo["TotalVirtualMemorySize"]);
-                freeVirtualKb = Convert.ToDouble(mo["FreeVirtualMemory"]);
-                totalSwapKb = Convert.ToDouble(mo["TotalSwapSpaceSize"]);
-                if (totalSwapKb <= 0)
-                    totalSwapKb = Convert.ToDouble(mo["SizeStoredInPagingFiles"]);
-                freeSwapKb = Convert.ToDouble(mo["FreeSpaceInPagingFiles"]);
-                break;
-            }
-        }
-        catch { }
-
         double cacheBytes = 0;
-        try
+
+        if (OperatingSystem.IsWindows())
         {
-            using var cacheCounter = new PerformanceCounter("Memory", "Cache Bytes");
-            cacheBytes = cacheCounter.NextValue();
+            try
+            {
+                using var searcher = new ManagementObjectSearcher("select TotalVirtualMemorySize, FreeVirtualMemory, TotalSwapSpaceSize, FreeSpaceInPagingFiles, SizeStoredInPagingFiles from Win32_OperatingSystem");
+                foreach (var mo in searcher.Get())
+                {
+                    totalVirtualKb = Convert.ToDouble(mo["TotalVirtualMemorySize"]);
+                    freeVirtualKb = Convert.ToDouble(mo["FreeVirtualMemory"]);
+                    totalSwapKb = Convert.ToDouble(mo["TotalSwapSpaceSize"]);
+                    if (totalSwapKb <= 0)
+                        totalSwapKb = Convert.ToDouble(mo["SizeStoredInPagingFiles"]);
+                    freeSwapKb = Convert.ToDouble(mo["FreeSpaceInPagingFiles"]);
+                    break;
+                }
+            }
+            catch { }
+
+            try
+            {
+                using var cacheCounter = new PerformanceCounter("Memory", "Cache Bytes");
+                cacheBytes = cacheCounter.NextValue();
+            }
+            catch { }
         }
-        catch { }
 
         foreach (var hardware in _computer.Hardware)
         {
@@ -282,18 +286,23 @@ public class HardwareMonitorService : IDisposable
 
     private static int GetPhysicalCoreCount()
     {
-        try
+        if (OperatingSystem.IsWindows())
         {
-            using var searcher = new ManagementObjectSearcher("select NumberOfCores from Win32_Processor");
-            var count = 0;
-            foreach (var mo in searcher.Get())
-                count += Convert.ToInt32(mo["NumberOfCores"]);
-            return count > 0 ? count : Environment.ProcessorCount;
+            try
+            {
+                using var searcher = new ManagementObjectSearcher("select NumberOfCores from Win32_Processor");
+                var count = 0;
+                foreach (var mo in searcher.Get())
+                    count += Convert.ToInt32(mo["NumberOfCores"]);
+                return count > 0 ? count : Environment.ProcessorCount;
+            }
+            catch
+            {
+                return Environment.ProcessorCount;
+            }
         }
-        catch
-        {
-            return Environment.ProcessorCount;
-        }
+
+        return Environment.ProcessorCount;
     }
     private class UpdateVisitor : IVisitor
     {
