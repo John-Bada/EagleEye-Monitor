@@ -6,8 +6,9 @@ export const useMetrics = () => {
   const [metrics, setMetrics] = useState<SystemMetrics | null>(null);
 
   useEffect(() => {
+    const baseUrl = import.meta.env.VITE_API_BASE_URL ?? "";
     const connection = new signalR.HubConnectionBuilder()
-      .withUrl("https://localhost:7102/hubs/metrics")
+      .withUrl(`${baseUrl}/hubs/metrics`)
       .withAutomaticReconnect()
       .build();
 
