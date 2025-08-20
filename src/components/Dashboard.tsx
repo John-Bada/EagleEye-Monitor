@@ -14,16 +14,9 @@ import {
     CheckCircle
 } from "lucide-react";
 import { AreaChart, Area, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { useMetrics } from "@/hooks/useMetrics";
 
 // --- Types ---
-interface SystemMetrics {
-    cpu: { usage: number };
-    memory: { usage: number };
-    disk: { usage: number };
-    network: { uploadSpeed: number };
-    gpu: { usage: number };
-    timestamp: string;
-}
 
 interface FlattenedMetrics {
     cpu: number;
@@ -56,36 +49,23 @@ const Dashboard = () => {
 
     const [processes, setProcesses] = useState<ProcessInfo[]>([]);
 
+    const liveMetrics = useMetrics();
     useEffect(() => {
-        const fetchMetrics = async () => {
-            try {
-                const res = await fetch("https://localhost:7102/api/systemPerformance/stats");
-                const data: SystemMetrics & { topProcesses: ProcessInfo[] } = await res.json();
+        if (!liveMetrics) return;
 
-                const flattened: FlattenedMetrics = {
-                    cpu: data.cpu?.usage ?? 0,
-                    memory: data.memory?.usage ?? 0,
-                    disk: data.disk?.usage ?? 0,
-                    network: data.network?.uploadSpeed ?? 0,
-                    gpu: data.gpu?.usage ?? 0,
-                    timestamp: new Date().toLocaleTimeString()
-                };
-
-                setCurrentMetrics(flattened);
-                setMetrics(prev => [...prev.slice(-19), flattened]);
-
-                if (data.topProcesses) {
-                    setProcesses(data.topProcesses);
-                }
-            } catch (error) {
-                console.error("Error fetching system metrics:", error);
-            }
+        const flattened: FlattenedMetrics = {
+            cpu: liveMetrics.cpu?.usage ?? 0,
+            memory: liveMetrics.memory?.usage ?? 0,
+            disk: liveMetrics.disk?.usage ?? 0,
+            network: liveMetrics.network?.uploadSpeed ?? 0,
+            gpu: liveMetrics.gpu?.usage ?? 0,
+            timestamp: new Date().toLocaleTimeString()
         };
 
-        fetchMetrics();
-        const interval = setInterval(fetchMetrics, 3000);
-        return () => clearInterval(interval);
-    }, []);
+        setCurrentMetrics(flattened);
+        setMetrics(prev => [...prev.slice(-19), flattened]);
+    }, [liveMetrics]);
+
 
     const getStatusColor = (value: number): "success" | "warning" | "destructive" => {
         if (value >= 90) return "destructive";
