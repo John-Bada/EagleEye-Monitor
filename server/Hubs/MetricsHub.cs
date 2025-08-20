@@ -24,7 +24,7 @@ public class MetricsHub : Hub
         while (!token.IsCancellationRequested)
         {
             var data = _monitor.GetMetrics();
-            await Clients.Caller.SendAsync("metrics", data, token);
+            await Clients.All.SendAsync("metrics", data, token);
             try
             {
                 await Task.Delay(TimeSpan.FromSeconds(1), token);

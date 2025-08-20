@@ -1,4 +1,7 @@
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
+using System.Net.NetworkInformation;
 using EagleEyeMonitor.Server.Models;
 using LibreHardwareMonitor.Hardware;
 
@@ -8,6 +11,8 @@ public class HardwareMonitorService : IDisposable
 {
     private readonly Computer _computer;
     private readonly UpdateVisitor _visitor = new();
+    private readonly Dictionary<string, (long sent, long received)> _networkSnapshot = new();
+    private DateTime _lastNetworkSample = DateTime.UtcNow;
 
     public HardwareMonitorService()
     {
@@ -61,21 +66,10 @@ public class HardwareMonitorService : IDisposable
                 case HardwareType.Storage:
                     foreach (var sensor in hardware.Sensors)
                     {
-                        if (sensor.SensorType == SensorType.Load && sensor.Name.Contains("Used Space"))
-                            metrics.Disk.Usage = Math.Max(metrics.Disk.Usage, sensor.Value ?? 0);
-                        else if (sensor.SensorType == SensorType.Throughput && sensor.Name.Contains("Read"))
+                        if (sensor.SensorType == SensorType.Throughput && sensor.Name.Contains("Read"))
                             metrics.Disk.ReadSpeed += sensor.Value ?? 0;
                         else if (sensor.SensorType == SensorType.Throughput && sensor.Name.Contains("Write"))
                             metrics.Disk.WriteSpeed += sensor.Value ?? 0;
-                    }
-                    break;
-                case HardwareType.Network:
-                    foreach (var sensor in hardware.Sensors)
-                    {
-                        if (sensor.SensorType == SensorType.Throughput && sensor.Name.Contains("Upload"))
-                            metrics.Network.UploadSpeed += sensor.Value ?? 0;
-                        else if (sensor.SensorType == SensorType.Throughput && sensor.Name.Contains("Download"))
-                            metrics.Network.DownloadSpeed += sensor.Value ?? 0;
                     }
                     break;
                 case HardwareType.GpuNvidia:
@@ -83,12 +77,42 @@ public class HardwareMonitorService : IDisposable
                 case HardwareType.GpuIntel:
                     foreach (var sensor in hardware.Sensors)
                     {
-                        if (sensor.SensorType == SensorType.Load && sensor.Name.Contains("Core"))
+                        if (sensor.SensorType == SensorType.Load && (sensor.Name.Contains("Core") || sensor.Name.Contains("GPU")))
                             metrics.Gpu.Usage = sensor.Value ?? 0;
                     }
                     break;
             }
         }
+
+        foreach (var drive in DriveInfo.GetDrives())
+        {
+            if (!drive.IsReady || drive.DriveType != DriveType.Fixed) continue;
+            var used = 1 - (double)drive.AvailableFreeSpace / drive.TotalSize;
+            metrics.Disk.Usage = Math.Max(metrics.Disk.Usage, used * 100);
+        }
+
+        var now = DateTime.UtcNow;
+        var elapsed = (now - _lastNetworkSample).TotalSeconds;
+        if (elapsed <= 0) elapsed = 1;
+        foreach (var nic in NetworkInterface.GetAllNetworkInterfaces())
+        {
+            if (nic.NetworkInterfaceType == NetworkInterfaceType.Loopback || nic.OperationalStatus != OperationalStatus.Up)
+                continue;
+            var stats = nic.GetIPv4Statistics();
+            if (_networkSnapshot.TryGetValue(nic.Id, out var prev))
+            {
+                var sent = stats.BytesSent - prev.sent;
+                var recv = stats.BytesReceived - prev.received;
+                metrics.Network.UploadSpeed += sent / elapsed;
+                metrics.Network.DownloadSpeed += recv / elapsed;
+                var speed = nic.Speed <= 0 ? 1 : nic.Speed; // bits per second
+                var upPct = (sent * 8) / (speed * elapsed) * 100;
+                var downPct = (recv * 8) / (speed * elapsed) * 100;
+                metrics.Network.Usage = Math.Max(metrics.Network.Usage, Math.Max(upPct, downPct));
+            }
+            _networkSnapshot[nic.Id] = (stats.BytesSent, stats.BytesReceived);
+        }
+        _lastNetworkSample = now;
 
         metrics.Processes = Process.GetProcesses().Length;
         metrics.Timestamp = DateTime.UtcNow;

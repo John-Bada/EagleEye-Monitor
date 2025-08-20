@@ -57,7 +57,7 @@ const Dashboard = () => {
             cpu: liveMetrics.cpu?.usage ?? 0,
             memory: liveMetrics.memory?.usage ?? 0,
             disk: liveMetrics.disk?.usage ?? 0,
-            network: liveMetrics.network?.uploadSpeed ?? 0,
+            network: liveMetrics.network?.usage ?? 0,
             gpu: liveMetrics.gpu?.usage ?? 0,
             timestamp: new Date().toLocaleTimeString()
         };

@@ -36,6 +36,7 @@ public class DiskMetrics
 
 public class NetworkMetrics
 {
+    public double Usage { get; set; }
     public double UploadSpeed { get; set; }
     public double DownloadSpeed { get; set; }
 }
