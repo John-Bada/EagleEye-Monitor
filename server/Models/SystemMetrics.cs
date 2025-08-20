@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace EagleEyeMonitor.Server.Models;
 
 public class SystemMetrics
@@ -7,6 +9,8 @@ public class SystemMetrics
     public DiskMetrics Disk { get; set; } = new();
     public NetworkMetrics Network { get; set; } = new();
     public GpuMetrics Gpu { get; set; } = new();
+    public List<ProcessInfo> TopProcesses { get; set; } = new();
+    public PerformanceHistory History { get; set; } = new();
     public int Processes { get; set; }
     public DateTime Timestamp { get; set; } = DateTime.UtcNow;
 }
@@ -44,4 +48,22 @@ public class NetworkMetrics
 public class GpuMetrics
 {
     public double Usage { get; set; }
+    public double Temperature { get; set; }
+}
+
+public class ProcessInfo
+{
+    public string Name { get; set; } = string.Empty;
+    public int Pid { get; set; }
+    public double Usage { get; set; }
+    public double Memory { get; set; }
+}
+
+public class PerformanceHistory
+{
+    public List<double> Cpu { get; set; } = new();
+    public List<double> Memory { get; set; } = new();
+    public List<double> Disk { get; set; } = new();
+    public List<double> Network { get; set; } = new();
+    public List<double> Gpu { get; set; } = new();
 }

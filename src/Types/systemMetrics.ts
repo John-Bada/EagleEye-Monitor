@@ -23,7 +23,21 @@ export type SystemMetrics = {
   };
   gpu: {
     usage: number;
+    temperature: number;
   };
   processes: number;
+  topProcesses: {
+    name: string;
+    pid: number;
+    usage: number;
+    memory: number;
+  }[];
+  history: {
+    cpu: number[];
+    memory: number[];
+    disk: number[];
+    network: number[];
+    gpu: number[];
+  };
   timestamp: string;
 };

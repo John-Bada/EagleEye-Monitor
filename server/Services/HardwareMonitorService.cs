@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Net.NetworkInformation;
 using EagleEyeMonitor.Server.Models;
 using LibreHardwareMonitor.Hardware;
@@ -12,7 +13,14 @@ public class HardwareMonitorService : IDisposable
     private readonly Computer _computer;
     private readonly UpdateVisitor _visitor = new();
     private readonly Dictionary<string, (long sent, long received)> _networkSnapshot = new();
+    private readonly Dictionary<int, TimeSpan> _processSnapshot = new();
     private DateTime _lastNetworkSample = DateTime.UtcNow;
+    private DateTime _lastProcessSample = DateTime.UtcNow;
+    private readonly Queue<double> _cpuHistory = new();
+    private readonly Queue<double> _memoryHistory = new();
+    private readonly Queue<double> _diskHistory = new();
+    private readonly Queue<double> _networkHistory = new();
+    private readonly Queue<double> _gpuHistory = new();
 
     public HardwareMonitorService()
     {
@@ -79,6 +87,8 @@ public class HardwareMonitorService : IDisposable
                     {
                         if (sensor.SensorType == SensorType.Load && (sensor.Name.Contains("Core") || sensor.Name.Contains("GPU")))
                             metrics.Gpu.Usage = sensor.Value ?? 0;
+                        else if (sensor.SensorType == SensorType.Temperature && sensor.Name.Contains("Core"))
+                            metrics.Gpu.Temperature = sensor.Value ?? 0;
                     }
                     break;
             }
@@ -114,7 +124,50 @@ public class HardwareMonitorService : IDisposable
         }
         _lastNetworkSample = now;
 
-        metrics.Processes = Process.GetProcesses().Length;
+        // Processes
+        var processElapsed = (now - _lastProcessSample).TotalSeconds;
+        if (processElapsed <= 0) processElapsed = 1;
+        var processes = Process.GetProcesses();
+        var procInfos = new List<ProcessInfo>();
+        foreach (var proc in processes)
+        {
+            try
+            {
+                var total = proc.TotalProcessorTime;
+                var prev = _processSnapshot.TryGetValue(proc.Id, out var ts) ? ts : TimeSpan.Zero;
+                var cpu = ((total - prev).TotalMilliseconds / (processElapsed * 1000 * Environment.ProcessorCount)) * 100;
+                var mem = proc.WorkingSet64 / 1024d / 1024d;
+                procInfos.Add(new ProcessInfo { Name = proc.ProcessName, Pid = proc.Id, Usage = cpu, Memory = mem });
+                _processSnapshot[proc.Id] = total;
+            }
+            catch { }
+        }
+        var dead = _processSnapshot.Keys.Except(processes.Select(p => p.Id)).ToList();
+        foreach (var d in dead) _processSnapshot.Remove(d);
+        metrics.TopProcesses = procInfos.OrderByDescending(p => p.Usage).Take(5).ToList();
+        _lastProcessSample = now;
+        metrics.Processes = processes.Length;
+
+        // History
+        void Enqueue(Queue<double> q, double v)
+        {
+            q.Enqueue(v);
+            if (q.Count > 60) q.Dequeue();
+        }
+        Enqueue(_cpuHistory, metrics.Cpu.Usage);
+        Enqueue(_memoryHistory, metrics.Memory.Usage);
+        Enqueue(_diskHistory, metrics.Disk.Usage);
+        Enqueue(_networkHistory, metrics.Network.Usage);
+        Enqueue(_gpuHistory, metrics.Gpu.Usage);
+        metrics.History = new PerformanceHistory
+        {
+            Cpu = _cpuHistory.ToList(),
+            Memory = _memoryHistory.ToList(),
+            Disk = _diskHistory.ToList(),
+            Network = _networkHistory.ToList(),
+            Gpu = _gpuHistory.ToList()
+        };
+
         metrics.Timestamp = DateTime.UtcNow;
         return metrics;
     }

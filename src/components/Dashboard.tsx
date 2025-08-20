@@ -53,6 +53,8 @@ const Dashboard = () => {
     useEffect(() => {
         if (!liveMetrics) return;
 
+        setProcesses(liveMetrics.topProcesses ?? []);
+
         const flattened: FlattenedMetrics = {
             cpu: liveMetrics.cpu?.usage ?? 0,
             memory: liveMetrics.memory?.usage ?? 0,
@@ -63,7 +65,20 @@ const Dashboard = () => {
         };
 
         setCurrentMetrics(flattened);
-        setMetrics(prev => [...prev.slice(-19), flattened]);
+        if (liveMetrics.history) {
+            const hist = liveMetrics.history;
+            const histData: FlattenedMetrics[] = hist.cpu.map((cpu, i) => ({
+                cpu,
+                memory: hist.memory[i] ?? 0,
+                disk: hist.disk[i] ?? 0,
+                network: hist.network[i] ?? 0,
+                gpu: hist.gpu[i] ?? 0,
+                timestamp: new Date().toLocaleTimeString()
+            }));
+            setMetrics(histData.slice(-60));
+        } else {
+            setMetrics(prev => [...prev.slice(-59), flattened]);
+        }
     }, [liveMetrics]);
 
 
@@ -148,7 +163,9 @@ const Dashboard = () => {
                                 />
                                 <Area type="monotone" dataKey="cpu" stackId="1" stroke="hsl(var(--cpu-color))" fill="hsl(var(--cpu-color) / 0.3)" name="CPU %" />
                                 <Area type="monotone" dataKey="memory" stackId="2" stroke="hsl(var(--memory-color))" fill="hsl(var(--memory-color) / 0.3)" name="Memory %" />
-                                <Area type="monotone" dataKey="gpu" stackId="3" stroke="hsl(var(--gpu-color))" fill="hsl(var(--gpu-color) / 0.3)" name="GPU %" />
+                                <Area type="monotone" dataKey="disk" stackId="3" stroke="hsl(var(--disk-color))" fill="hsl(var(--disk-color) / 0.3)" name="Disk %" />
+                                <Area type="monotone" dataKey="network" stackId="4" stroke="hsl(var(--network-color))" fill="hsl(var(--network-color) / 0.3)" name="Network %" />
+                                <Area type="monotone" dataKey="gpu" stackId="5" stroke="hsl(var(--gpu-color))" fill="hsl(var(--gpu-color) / 0.3)" name="GPU %" />
                             </AreaChart>
                         </ResponsiveContainer>
                     </CardContent>
