@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net.NetworkInformation;
+using System.Management;
 using EagleEyeMonitor.Server.Models;
 using LibreHardwareMonitor.Hardware;
 
@@ -17,6 +18,8 @@ public class HardwareMonitorService : IDisposable
     private DateTime _lastNetworkSample = DateTime.UtcNow;
     private DateTime _lastProcessSample = DateTime.UtcNow;
     private readonly Queue<double> _cpuHistory = new();
+    private readonly Queue<double> _cpuTempHistory = new();
+    private readonly Queue<double> _cpuFreqHistory = new();
     private readonly Queue<double> _memoryHistory = new();
     private readonly Queue<double> _diskHistory = new();
     private readonly Queue<double> _networkHistory = new();
@@ -46,8 +49,10 @@ public class HardwareMonitorService : IDisposable
             switch (hardware.HardwareType)
             {
                 case HardwareType.Cpu:
-                    metrics.Cpu.Cores = Environment.ProcessorCount;
                     metrics.Cpu.Threads = Environment.ProcessorCount;
+                    metrics.Cpu.Cores = GetPhysicalCoreCount();
+                    var coreLoads = new List<ISensor>();
+                    var coreTemps = new List<ISensor>();
                     foreach (var sensor in hardware.Sensors)
                     {
                         if (sensor.SensorType == SensorType.Load && sensor.Name.Equals("CPU Total", StringComparison.OrdinalIgnoreCase))
@@ -56,9 +61,23 @@ public class HardwareMonitorService : IDisposable
                             metrics.Cpu.Temperature = sensor.Value ?? 0;
                         else if (sensor.SensorType == SensorType.Clock && sensor.Name.Contains("Core"))
                             metrics.Cpu.Frequency += sensor.Value ?? 0;
+                        else if (sensor.SensorType == SensorType.Load && sensor.Name.Contains("Core #"))
+                            coreLoads.Add(sensor);
+                        else if (sensor.SensorType == SensorType.Temperature && sensor.Name.Contains("Core #"))
+                            coreTemps.Add(sensor);
                     }
                     if (metrics.Cpu.Cores > 0)
                         metrics.Cpu.Frequency /= metrics.Cpu.Cores;
+                    foreach (var load in coreLoads)
+                    {
+                        var temp = coreTemps.FirstOrDefault(t => t.Name.EndsWith(load.Name.Substring(load.Name.IndexOf('#'))));
+                        metrics.Cpu.CoreData.Add(new CpuCoreMetrics
+                        {
+                            Core = load.Name.Replace("CPU ", string.Empty),
+                            Usage = load.Value ?? 0,
+                            Temperature = temp?.Value ?? 0
+                        });
+                    }
                     break;
                 case HardwareType.Memory:
                     foreach (var sensor in hardware.Sensors)
@@ -155,6 +174,8 @@ public class HardwareMonitorService : IDisposable
             if (q.Count > 60) q.Dequeue();
         }
         Enqueue(_cpuHistory, metrics.Cpu.Usage);
+        Enqueue(_cpuTempHistory, metrics.Cpu.Temperature);
+        Enqueue(_cpuFreqHistory, metrics.Cpu.Frequency);
         Enqueue(_memoryHistory, metrics.Memory.Usage);
         Enqueue(_diskHistory, metrics.Disk.Usage);
         Enqueue(_networkHistory, metrics.Network.Usage);
@@ -162,6 +183,8 @@ public class HardwareMonitorService : IDisposable
         metrics.History = new PerformanceHistory
         {
             Cpu = _cpuHistory.ToList(),
+            CpuTemperature = _cpuTempHistory.ToList(),
+            CpuFrequency = _cpuFreqHistory.ToList(),
             Memory = _memoryHistory.ToList(),
             Disk = _diskHistory.ToList(),
             Network = _networkHistory.ToList(),
@@ -173,6 +196,22 @@ public class HardwareMonitorService : IDisposable
     }
 
     public void Dispose() => _computer.Close();
+
+    private static int GetPhysicalCoreCount()
+    {
+        try
+        {
+            using var searcher = new ManagementObjectSearcher("select NumberOfCores from Win32_Processor");
+            var count = 0;
+            foreach (var mo in searcher.Get())
+                count += Convert.ToInt32(mo["NumberOfCores"]);
+            return count > 0 ? count : Environment.ProcessorCount;
+        }
+        catch
+        {
+            return Environment.ProcessorCount;
+        }
+    }
     private class UpdateVisitor : IVisitor
     {
         public void VisitComputer(IComputer computer)

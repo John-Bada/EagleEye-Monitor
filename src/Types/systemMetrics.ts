@@ -5,6 +5,7 @@ export type SystemMetrics = {
     frequency: number;
     cores: number;
     threads: number;
+    coreData: { core: string; usage: number; temperature: number }[];
   };
   memory: {
     usage: number;
@@ -34,6 +35,8 @@ export type SystemMetrics = {
   }[];
   history: {
     cpu: number[];
+    cpuTemperature: number[];
+    cpuFrequency: number[];
     memory: number[];
     disk: number[];
     network: number[];
