@@ -6,7 +6,6 @@ namespace EagleEyeMonitor.Server.Hubs;
 public class MetricsHub : Hub
 {
     private readonly HardwareMonitorService _monitor;
-    private Timer? _timer;
 
     public MetricsHub(HardwareMonitorService monitor)
     {
@@ -15,17 +14,25 @@ public class MetricsHub : Hub
 
     public override Task OnConnectedAsync()
     {
-        _timer = new Timer(async _ =>
-        {
-            var data = _monitor.GetMetrics();
-            await Clients.Caller.SendAsync("metrics", data);
-        }, null, TimeSpan.Zero, TimeSpan.FromSeconds(1));
+        var token = Context.ConnectionAborted;
+        _ = BroadcastMetricsAsync(token);
         return base.OnConnectedAsync();
     }
 
-    public override Task OnDisconnectedAsync(Exception? exception)
+    private async Task BroadcastMetricsAsync(CancellationToken token)
     {
-        _timer?.Dispose();
-        return base.OnDisconnectedAsync(exception);
+        while (!token.IsCancellationRequested)
+        {
+            var data = _monitor.GetMetrics();
+            await Clients.Caller.SendAsync("metrics", data, token);
+            try
+            {
+                await Task.Delay(TimeSpan.FromSeconds(1), token);
+            }
+            catch (TaskCanceledException)
+            {
+                break;
+            }
+        }
     }
 }
