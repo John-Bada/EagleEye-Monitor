@@ -1,2 +1,0 @@
-C:\Users\User\Desktop\CHURCHILL\c# 2\EagleEyeMonitor\eagleeyemonitor.client\obj\Debug\eagleeyemonitor.client.esproj.CoreCompileInputs.cache
-C:\Users\User\Desktop\CHURCHILL\csharp2\EagleEyeMonitor\eagleeyemonitor.client\obj\Debug\eagleeyemonitor.client.esproj.CoreCompileInputs.cache

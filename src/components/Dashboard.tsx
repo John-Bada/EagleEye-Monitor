@@ -14,16 +14,9 @@ import {
     CheckCircle
 } from "lucide-react";
 import { AreaChart, Area, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { useMetrics } from "@/hooks/useMetrics";
 
 // --- Types ---
-interface SystemMetrics {
-    cpu: { usage: number };
-    memory: { usage: number };
-    disk: { usage: number };
-    network: { uploadSpeed: number };
-    gpu: { usage: number };
-    timestamp: string;
-}
 
 interface FlattenedMetrics {
     cpu: number;
@@ -56,36 +49,38 @@ const Dashboard = () => {
 
     const [processes, setProcesses] = useState<ProcessInfo[]>([]);
 
+    const liveMetrics = useMetrics();
     useEffect(() => {
-        const fetchMetrics = async () => {
-            try {
-                const res = await fetch("https://localhost:7102/api/systemPerformance/stats");
-                const data: SystemMetrics & { topProcesses: ProcessInfo[] } = await res.json();
+        if (!liveMetrics) return;
 
-                const flattened: FlattenedMetrics = {
-                    cpu: data.cpu?.usage ?? 0,
-                    memory: data.memory?.usage ?? 0,
-                    disk: data.disk?.usage ?? 0,
-                    network: data.network?.uploadSpeed ?? 0,
-                    gpu: data.gpu?.usage ?? 0,
-                    timestamp: new Date().toLocaleTimeString()
-                };
+        setProcesses(liveMetrics.topProcesses ?? []);
 
-                setCurrentMetrics(flattened);
-                setMetrics(prev => [...prev.slice(-19), flattened]);
-
-                if (data.topProcesses) {
-                    setProcesses(data.topProcesses);
-                }
-            } catch (error) {
-                console.error("Error fetching system metrics:", error);
-            }
+        const flattened: FlattenedMetrics = {
+            cpu: liveMetrics.cpu?.usage ?? 0,
+            memory: liveMetrics.memory?.usage ?? 0,
+            disk: liveMetrics.disk?.usage ?? 0,
+            network: liveMetrics.network?.usage ?? 0,
+            gpu: liveMetrics.gpu?.usage ?? 0,
+            timestamp: new Date().toLocaleTimeString()
         };
 
-        fetchMetrics();
-        const interval = setInterval(fetchMetrics, 3000);
-        return () => clearInterval(interval);
-    }, []);
+        setCurrentMetrics(flattened);
+        if (liveMetrics.history) {
+            const hist = liveMetrics.history;
+            const histData: FlattenedMetrics[] = hist.cpu.map((cpu, i) => ({
+                cpu,
+                memory: hist.memory[i] ?? 0,
+                disk: hist.disk[i] ?? 0,
+                network: hist.network[i] ?? 0,
+                gpu: hist.gpu[i] ?? 0,
+                timestamp: new Date().toLocaleTimeString()
+            }));
+            setMetrics(histData.slice(-60));
+        } else {
+            setMetrics(prev => [...prev.slice(-59), flattened]);
+        }
+    }, [liveMetrics]);
+
 
     const getStatusColor = (value: number): "success" | "warning" | "destructive" => {
         if (value >= 90) return "destructive";
@@ -168,7 +163,9 @@ const Dashboard = () => {
                                 />
                                 <Area type="monotone" dataKey="cpu" stackId="1" stroke="hsl(var(--cpu-color))" fill="hsl(var(--cpu-color) / 0.3)" name="CPU %" />
                                 <Area type="monotone" dataKey="memory" stackId="2" stroke="hsl(var(--memory-color))" fill="hsl(var(--memory-color) / 0.3)" name="Memory %" />
-                                <Area type="monotone" dataKey="gpu" stackId="3" stroke="hsl(var(--gpu-color))" fill="hsl(var(--gpu-color) / 0.3)" name="GPU %" />
+                                <Area type="monotone" dataKey="disk" stackId="3" stroke="hsl(var(--disk-color))" fill="hsl(var(--disk-color) / 0.3)" name="Disk %" />
+                                <Area type="monotone" dataKey="network" stackId="4" stroke="hsl(var(--network-color))" fill="hsl(var(--network-color) / 0.3)" name="Network %" />
+                                <Area type="monotone" dataKey="gpu" stackId="5" stroke="hsl(var(--gpu-color))" fill="hsl(var(--gpu-color) / 0.3)" name="GPU %" />
                             </AreaChart>
                         </ResponsiveContainer>
                     </CardContent>

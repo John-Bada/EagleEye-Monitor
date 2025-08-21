@@ -22,6 +22,7 @@ import {
 } from "recharts";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
+import { useMetrics } from "@/hooks/useMetrics";
 
 interface MemoryUsage {
     used: number;
@@ -69,49 +70,55 @@ const MemoryDashboard = () => {
     const [distribution, setDistribution] = useState<MemoryDistribution[]>([]);
     const [topProcesses, setTopProcesses] = useState<MemoryProcess[]>([]);
 
+    const liveMetrics = useMetrics();
+
     useEffect(() => {
-        const fetchMemoryData = async () => {
-            try {
-                const res = await fetch("http://localhost:7102/api/systemperformance/stats");
-                const data = await res.json();
+        if (!liveMetrics) return;
 
-                const memory = data.memory || {};
+        const memory = liveMetrics.memory;
+        setMemoryData({
+            physical: memory.physical ?? { used: 0, total: 0, percentage: 0 },
+            virtual: memory.virtual ?? { used: 0, total: 0, percentage: 0 },
+            cache: memory.cache ?? { used: 0, total: 0, percentage: 0 },
+            swap: memory.swap ?? { used: 0, total: 0, percentage: 0 }
+        });
 
-                setMemoryData({
-                    physical: memory.physical ?? { used: 0, total: 0, percentage: 0 },
-                    virtual: memory.virtual ?? { used: 0, total: 0, percentage: 0 },
-                    cache: memory.cache ?? { used: 0, total: 0, percentage: 0 },
-                    swap: memory.swap ?? { used: 0, total: 0, percentage: 0 }
-                });
+        setTopProcesses(liveMetrics.topMemoryProcesses ?? []);
 
-                setTopProcesses(data.topMemoryProcesses ?? []);
-
-                setDistribution([
-                    { name: "Applications", value: data.memoryDistribution?.applications ?? 0, color: "hsl(var(--primary))" },
-                    { name: "System", value: data.memoryDistribution?.system ?? 0, color: "hsl(var(--secondary))" },
-                    { name: "Cache", value: data.memoryDistribution?.cache ?? 0, color: "hsl(var(--accent))" },
-                    { name: "Free", value: data.memoryDistribution?.free ?? 0, color: "hsl(var(--muted))" }
-                ]);
-
-                setHistoricalData((prev) => [
-                    ...prev.slice(-19),
-                    {
-                        time: new Date().toLocaleTimeString(),
-                        physical: memory.physical?.percentage ?? 0,
-                        virtual: memory.virtual?.percentage ?? 0,
-                        cache: memory.cache?.percentage ?? 0,
-                        swap: memory.swap?.percentage ?? 0
-                    }
-                ]);
-            } catch (error) {
-                console.error("Error fetching memory data:", error);
+        setDistribution([
+            {
+                name: "Applications",
+                value: liveMetrics.memoryDistribution?.applications ?? 0,
+                color: "hsl(var(--primary))"
+            },
+            {
+                name: "System",
+                value: liveMetrics.memoryDistribution?.system ?? 0,
+                color: "hsl(var(--secondary))"
+            },
+            {
+                name: "Cache",
+                value: liveMetrics.memoryDistribution?.cache ?? 0,
+                color: "hsl(var(--accent))"
+            },
+            {
+                name: "Free",
+                value: liveMetrics.memoryDistribution?.free ?? 0,
+                color: "hsl(var(--muted))"
             }
-        };
+        ]);
 
-        fetchMemoryData();
-        const interval = setInterval(fetchMemoryData, 3000);
-        return () => clearInterval(interval);
-    }, []);
+        setHistoricalData(prev => [
+            ...prev.slice(-59),
+            {
+                time: new Date().toLocaleTimeString(),
+                physical: memory.physical?.percentage ?? 0,
+                virtual: memory.virtual?.percentage ?? 0,
+                cache: memory.cache?.percentage ?? 0,
+                swap: memory.swap?.percentage ?? 0
+            }
+        ]);
+    }, [liveMetrics]);
 
     const getMemoryColor = (percentage: number): string => {
         if (percentage < 60) return "hsl(var(--success))";

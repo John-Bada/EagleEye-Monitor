@@ -27,6 +27,7 @@ import {
 } from "recharts";
 import { useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
+import { useMetrics } from "@/hooks/useMetrics";
 
 const CpuDashboard = () => {
     const navigate = useNavigate();
@@ -52,43 +53,30 @@ const CpuDashboard = () => {
         { name: string; usage: number; pid: number }[]
     >([]);
 
+    const liveMetrics = useMetrics();
+
     useEffect(() => {
-        const fetchCpuData = async () => {
-            try {
-                const res = await fetch("https://localhost:7102/api/systemPerformance/stats");
-                const data = await res.json();
-
-                const cpu = data.cpu ?? {};
-                setCpuData({
-                    usage: cpu.usage ?? 0,
-                    temperature: cpu.temperature ?? 0,
-                    frequency: cpu.frequency ?? 0,
-                    cores: cpu.cores ?? 0,
-                    threads: cpu.threads ?? 0,
-                    processes: data.processes ?? 0
-                });
-
-                if (cpu.coreData) setCoreData(cpu.coreData);
-                if (data.topProcesses) setTopProcesses(data.topProcesses);
-
-                setHistoricalData(prev => [
-                    ...prev.slice(-19),
-                    {
-                        time: new Date().toLocaleTimeString(),
-                        usage: cpu.usage ?? 0,
-                        temperature: cpu.temperature ?? 0,
-                        frequency: cpu.frequency ?? 0
-                    }
-                ]);
-            } catch (error) {
-                console.error("Error fetching CPU data:", error);
-            }
-        };
-
-        fetchCpuData();
-        const interval = setInterval(fetchCpuData, 2000);
-        return () => clearInterval(interval);
-    }, []);
+        if (!liveMetrics) return;
+        const cpu = liveMetrics.cpu;
+        setCpuData({
+            usage: cpu.usage,
+            temperature: cpu.temperature,
+            frequency: cpu.frequency,
+            cores: cpu.cores,
+            threads: cpu.threads,
+            processes: liveMetrics.processes
+        });
+        setCoreData(cpu.coreData ?? []);
+        setTopProcesses(liveMetrics.topProcesses ?? []);
+        const hist = liveMetrics.history;
+        const histData = hist.cpu.map((usage, i) => ({
+            time: new Date().toLocaleTimeString(),
+            usage,
+            temperature: hist.cpuTemperature[i] ?? 0,
+            frequency: hist.cpuFrequency[i] ?? 0
+        }));
+        setHistoricalData(histData.slice(-60));
+    }, [liveMetrics]);
 
     const getUsageColor = (usage: number) =>
         usage < 50
