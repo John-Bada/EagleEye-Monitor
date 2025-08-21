@@ -42,7 +42,7 @@ const CpuDashboard = () => {
     });
 
     const [historicalData, setHistoricalData] = useState<
-        { time: string; usage: number; temperature: number; frequency: number }[]
+        { timestamp: number; usage: number; temperature: number; frequency: number }[]
     >([]);
 
     const [coreData, setCoreData] = useState<
@@ -69,8 +69,9 @@ const CpuDashboard = () => {
         setCoreData(cpu.coreData ?? []);
         setTopProcesses(liveMetrics.topProcesses ?? []);
         const hist = liveMetrics.history;
+        const now = Date.now();
         const histData = hist.cpu.map((usage, i) => ({
-            time: new Date().toLocaleTimeString(),
+            timestamp: now - (hist.cpu.length - 1 - i) * 1000,
             usage,
             temperature: hist.cpuTemperature[i] ?? 0,
             frequency: hist.cpuFrequency[i] ?? 0
@@ -91,6 +92,10 @@ const CpuDashboard = () => {
             : temp < 80
                 ? "hsl(var(--warning))"
                 : "hsl(var(--destructive))";
+
+    const historyTicks = historicalData
+        .filter((_, i) => i % 2 === 0)
+        .map(d => d.timestamp);
 
     return (
         <div className="min-h-screen bg-background p-6">
@@ -188,7 +193,15 @@ const CpuDashboard = () => {
                             <ResponsiveContainer width="100%" height={300}>
                                 <LineChart data={historicalData}>
                                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                                    <XAxis dataKey="time" stroke="hsl(var(--muted-foreground))" />
+                                    <XAxis
+                                        dataKey="timestamp"
+                                        type="number"
+                                        domain={['dataMin', 'dataMax']}
+                                        scale="time"
+                                        ticks={historyTicks}
+                                        tickFormatter={(value) => new Date(value).toLocaleTimeString()}
+                                        stroke="hsl(var(--muted-foreground))"
+                                    />
                                     <YAxis stroke="hsl(var(--muted-foreground))" />
                                     <Tooltip
                                         contentStyle={{
@@ -223,8 +236,8 @@ const CpuDashboard = () => {
                                             borderRadius: "8px"
                                         }}
                                     />
-                                    <Bar dataKey="usage" fill="hsl(var(--primary))" name="Usage %" />
-                                    <Bar dataKey="temperature" fill="hsl(var(--warning))" name="Temp °C" />
+                                    <Bar dataKey="usage" fill="hsla(116, 94%, 48%, 1.00)" name="Usage %" />
+                                    <Bar dataKey="temperature" fill="hsla(0, 83%, 47%, 1.00)" name="Temp °C" />
                                 </BarChart>
                             </ResponsiveContainer>
                         </CardContent>

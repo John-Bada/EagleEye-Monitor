@@ -118,7 +118,6 @@ public class HardwareMonitorService : IDisposable
             switch (hardware.HardwareType)
             {
                 case HardwareType.Cpu:
-                    metrics.Cpu.Threads = Environment.ProcessorCount;
                     metrics.Cpu.Cores = GetPhysicalCoreCount();
                     var coreLoads = new List<ISensor>();
                     var coreTemps = new List<ISensor>();

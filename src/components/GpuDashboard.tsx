@@ -26,7 +26,7 @@ const GpuDashboard = () => {
   const [fanSpeed, setFanSpeed] = useState(0);
   const [gpuProcesses, setGpuProcesses] = useState<GpuProcess[]>([]);
   const [historicalData, setHistoricalData] = useState<
-    { time: string; usage: number; temperature: number; memory: number; power: number }[]
+    { timestamp: number; usage: number; temperature: number; memory: number; power: number }[]
   >([]);
 
   useEffect(() => {
@@ -57,7 +57,7 @@ const GpuDashboard = () => {
     setHistoricalData(prev => [
       ...prev.slice(-19),
       {
-        time: new Date().toLocaleTimeString(),
+        timestamp: Date.now(),
         usage,
         temperature: temp,
         memory: total > 0 ? (used / total) * 100 : 0,
@@ -71,6 +71,10 @@ const GpuDashboard = () => {
 
   const getTempColor = (temp: number) =>
     temp < 75 ? "hsl(var(--success))" : temp < 85 ? "hsl(var(--warning))" : "hsl(var(--destructive))";
+
+  const historyTicks = historicalData
+    .filter((_, i) => i % 2 === 0)
+    .map(d => d.timestamp);
 
   return (
     <div className="min-h-screen bg-background p-6">
@@ -155,7 +159,15 @@ const GpuDashboard = () => {
               <ResponsiveContainer width="100%" height={300}>
                 <LineChart data={historicalData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis dataKey="time" stroke="hsl(var(--muted-foreground))" />
+                  <XAxis
+                    dataKey="timestamp"
+                    type="number"
+                    domain={['dataMin', 'dataMax']}
+                    scale="time"
+                    ticks={historyTicks}
+                    tickFormatter={(value) => new Date(value).toLocaleTimeString()}
+                    stroke="hsl(var(--muted-foreground))"
+                  />
                   <YAxis stroke="hsl(var(--muted-foreground))" />
                   <Tooltip
                     contentStyle={{
@@ -187,7 +199,15 @@ const GpuDashboard = () => {
               <ResponsiveContainer width="100%" height={300}>
                 <AreaChart data={historicalData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis dataKey="time" stroke="hsl(var(--muted-foreground))" />
+                  <XAxis
+                    dataKey="timestamp"
+                    type="number"
+                    domain={['dataMin', 'dataMax']}
+                    scale="time"
+                    ticks={historyTicks}
+                    tickFormatter={(value) => new Date(value).toLocaleTimeString()}
+                    stroke="hsl(var(--muted-foreground))"
+                  />
                   <YAxis stroke="hsl(var(--muted-foreground))" />
                   <Tooltip
                     contentStyle={{

@@ -38,7 +38,7 @@ interface MemoryData {
 }
 
 interface HistoricalMemory {
-    time: string;
+    timestamp: number;
     physical: number;
     virtual: number;
     cache: number;
@@ -94,12 +94,12 @@ const MemoryDashboard = () => {
             {
                 name: "System",
                 value: liveMetrics.memoryDistribution?.system ?? 0,
-                color: "hsl(var(--secondary))"
+                color: "hsla(122, 96%, 27%, 1.00)"
             },
             {
                 name: "Cache",
                 value: liveMetrics.memoryDistribution?.cache ?? 0,
-                color: "hsl(var(--accent))"
+                color: "hsla(284, 98%, 32%, 1.00)"
             },
             {
                 name: "Free",
@@ -111,7 +111,7 @@ const MemoryDashboard = () => {
         setHistoricalData(prev => [
             ...prev.slice(-59),
             {
-                time: new Date().toLocaleTimeString(),
+                timestamp: Date.now(),
                 physical: memory.physical?.percentage ?? 0,
                 virtual: memory.virtual?.percentage ?? 0,
                 cache: memory.cache?.percentage ?? 0,
@@ -125,6 +125,10 @@ const MemoryDashboard = () => {
         if (percentage < 80) return "hsl(var(--warning))";
         return "hsl(var(--destructive))";
     };
+
+    const historyTicks = historicalData
+        .filter((_, i) => i % 2 === 0)
+        .map(d => d.timestamp);
 
     const renderMemoryCard = (
         title: string,
@@ -186,12 +190,26 @@ const MemoryDashboard = () => {
                             <ResponsiveContainer width="100%" height={300}>
                                 <LineChart data={historicalData}>
                                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                                    <XAxis dataKey="time" stroke="hsl(var(--muted-foreground))" />
+                                    <XAxis
+                                        dataKey="timestamp"
+                                        type="number"
+                                        domain={['dataMin', 'dataMax']}
+                                        scale="time"
+                                        ticks={historyTicks}
+                                        stroke="hsl(var(--muted-foreground))"
+                                        tickFormatter={(value) => new Date(value).toLocaleTimeString()}
+                                    />
                                     <YAxis stroke="hsl(var(--muted-foreground))" />
-                                    <Tooltip />
-                                    <Line type="monotone" dataKey="physical" stroke="hsl(var(--primary))" strokeWidth={2} />
-                                    <Line type="monotone" dataKey="virtual" stroke="hsl(var(--secondary))" strokeWidth={2} />
-                                    <Line type="monotone" dataKey="cache" stroke="hsl(var(--accent))" strokeWidth={2} />
+                                       <Tooltip
+                                        contentStyle={{
+                                            backgroundColor: "hsl(var(--card))",
+                                            border: "1px solid hsl(var(--border))",
+                                            borderRadius: "8px"
+                                        }}
+                                    />
+                                    <Line type="monotone" dataKey="physical" stroke="hsl(195 100% 50%)" strokeWidth={2} />
+                                    <Line type="monotone" dataKey="virtual" stroke="hsl(0 75% 60%)" strokeWidth={2} />
+                                    <Line type="monotone" dataKey="cache" stroke="hsl(142 76% 55%)" strokeWidth={2} />
                                     <Line type="monotone" dataKey="swap" stroke="hsl(var(--warning))" strokeWidth={2} />
                                 </LineChart>
                             </ResponsiveContainer>
@@ -211,14 +229,21 @@ const MemoryDashboard = () => {
                                             <Cell key={`cell-${index}`} fill={entry.color} />
                                         ))}
                                     </Pie>
-                                    <Tooltip />
+                                     <Tooltip
+                                        contentStyle={{
+                                            backgroundColor: "hsla(58, 100%, 39%, 1.00)",
+                                            border: "1px solid hsl(var(--border))",
+                                            borderRadius: "8px"
+                                        }}
+                                    />
                                 </PieChart>
                             </ResponsiveContainer>
                             <div className="grid grid-cols-2 gap-2 mt-4">
                                 {distribution.map((type, index) => (
                                     <div key={index} className="flex items-center gap-2">
                                         <div className="w-3 h-3 rounded-full" style={{ backgroundColor: type.color }} />
-                                        <span className="text-sm">{type.name}: {type.value}%</span>
+                                        <span className="text-sm">{type.name}:{Math.round(type.value * 1000) / 1000}
+                                     %</span>
                                     </div>
                                 ))}
                             </div>
@@ -253,6 +278,7 @@ const MemoryDashboard = () => {
                                     </div>
                                 </div>
                             ))}
+                            
                         </div>
                     </CardContent>
                 </Card>

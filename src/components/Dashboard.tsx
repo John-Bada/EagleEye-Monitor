@@ -24,7 +24,7 @@ interface FlattenedMetrics {
     disk: number;
     network: number;
     gpu: number;
-    timestamp: string;
+    timestamp: number;
 }
 
 interface ProcessInfo {
@@ -44,7 +44,7 @@ const Dashboard = () => {
         disk: 0,
         network: 0,
         gpu: 0,
-        timestamp: new Date().toLocaleTimeString()
+        timestamp: Date.now()
     });
 
     const [processes, setProcesses] = useState<ProcessInfo[]>([]);
@@ -61,19 +61,20 @@ const Dashboard = () => {
             disk: liveMetrics.disk?.usage ?? 0,
             network: liveMetrics.network?.usage ?? 0,
             gpu: liveMetrics.gpu?.usage ?? 0,
-            timestamp: new Date().toLocaleTimeString()
+            timestamp: Date.now()
         };
 
         setCurrentMetrics(flattened);
         if (liveMetrics.history) {
             const hist = liveMetrics.history;
+            const now = Date.now();
             const histData: FlattenedMetrics[] = hist.cpu.map((cpu, i) => ({
                 cpu,
                 memory: hist.memory[i] ?? 0,
                 disk: hist.disk[i] ?? 0,
                 network: hist.network[i] ?? 0,
                 gpu: hist.gpu[i] ?? 0,
-                timestamp: new Date().toLocaleTimeString()
+                timestamp: now - (hist.cpu.length - 1 - i) * 1000
             }));
             setMetrics(histData.slice(-60));
         } else {
@@ -120,6 +121,10 @@ const Dashboard = () => {
         </Card>
     );
 
+    const xTicks = metrics
+        .filter((_, i) => i % 2 === 0)
+        .map(m => m.timestamp);
+
     return (
         <div className="p-6 space-y-6">
             <div className="flex items-center justify-between">
@@ -152,12 +157,22 @@ const Dashboard = () => {
                         <ResponsiveContainer width="100%" height={300}>
                             <AreaChart data={metrics}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                                <XAxis dataKey="timestamp" stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                                <XAxis
+                                    dataKey="timestamp"
+                                    type="number"
+                                    domain={['dataMin', 'dataMax']}
+                                    scale="time"
+                                    ticks={xTicks}
+                                    tickFormatter={(value) => new Date(value).toLocaleTimeString()}
+                                    stroke="hsl(var(--muted-foreground))"
+                                    fontSize={12}
+                                />
                                 <YAxis
                                     stroke="hsl(var(--muted-foreground))"
                                     fontSize={12}
                                     domain={[0, 100]}
                                     ticks={[0, 20, 40, 60, 80, 100]}
+                                    tickFormatter={(value) => `${value}%`}
                                 />
                                 <Tooltip
                                     contentStyle={{
