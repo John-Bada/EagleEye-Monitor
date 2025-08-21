@@ -1,44 +1,16 @@
-import {
-  ArrowLeft, HardDrive, Activity
-} from "lucide-react";
-import {
-  Card, CardContent, CardHeader, CardTitle
-} from "@/components/ui/card";
+import { ArrowLeft, HardDrive } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
-import { useState, useEffect } from "react";
-
-interface TopProcess {
-  name: string;
-  pid: number;
-  usage: number;
-  memory: number;
-}
+import { useMetrics } from "@/hooks/useMetrics";
 
 const DiskDashboard = () => {
   const navigate = useNavigate();
+  const metrics = useMetrics();
 
-  const [diskUsage, setDiskUsage] = useState<number>(0);
-  const [topProcesses, setTopProcesses] = useState<TopProcess[]>([]);
-
-  useEffect(() => {
-    const fetchDiskData = async () => {
-      try {
-        const res = await fetch("http://localhost:7102/api/systemperformance/stats");
-        const data = await res.json();
-
-        setDiskUsage(data.diskUsage ?? 0);
-        setTopProcesses(data.topProcesses ?? []);
-      } catch (err) {
-        console.error("Failed to fetch disk data", err);
-      }
-    };
-
-    fetchDiskData();
-    const interval = setInterval(fetchDiskData, 3000);
-    return () => clearInterval(interval);
-  }, []);
+  const diskUsage = metrics?.disk.usage ?? 0;
+  const topProcesses = metrics?.topProcesses ?? [];
 
   const getUsageColor = (usage: number) => {
     if (usage < 70) return "hsl(var(--success))";
