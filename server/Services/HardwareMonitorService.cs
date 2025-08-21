@@ -29,6 +29,8 @@ public class HardwareMonitorService : IDisposable
     private readonly Queue<double> _networkUpHistory = new();
     private readonly Queue<double> _pingHistory = new();
     private readonly Queue<double> _gpuHistory = new();
+    private readonly Dictionary<string, (ulong readSectors, ulong writeSectors, ulong ioMs)> _diskSnapshot = new();
+    private DateTime _lastDiskSample = DateTime.UtcNow;
 
     public HardwareMonitorService()
     {
@@ -141,13 +143,6 @@ public class HardwareMonitorService : IDisposable
                     }
                     break;
                 case HardwareType.Storage:
-                    foreach (var sensor in hardware.Sensors)
-                    {
-                        if (sensor.SensorType == SensorType.Throughput && sensor.Name.Contains("Read"))
-                            metrics.Disk.ReadSpeed += sensor.Value ?? 0;
-                        else if (sensor.SensorType == SensorType.Throughput && sensor.Name.Contains("Write"))
-                            metrics.Disk.WriteSpeed += sensor.Value ?? 0;
-                    }
                     break;
                 case HardwareType.GpuNvidia:
                 case HardwareType.GpuAmd:
@@ -181,14 +176,61 @@ public class HardwareMonitorService : IDisposable
             }
         }
 
-        foreach (var drive in DriveInfo.GetDrives())
+        var now = DateTime.UtcNow;
+        var diskElapsedMs = (now - _lastDiskSample).TotalMilliseconds;
+        if (diskElapsedMs <= 0) diskElapsedMs = 1;
+
+        if (OperatingSystem.IsWindows())
         {
-            if (!drive.IsReady || drive.DriveType != DriveType.Fixed) continue;
-            var used = 1 - (double)drive.AvailableFreeSpace / drive.TotalSize;
-            metrics.Disk.Usage = Math.Max(metrics.Disk.Usage, used * 100);
+            try
+            {
+                using var usageCounter = new PerformanceCounter("PhysicalDisk", "% Disk Time", "_Total");
+                metrics.Disk.Usage = usageCounter.NextValue();
+                using var readCounter = new PerformanceCounter("PhysicalDisk", "Disk Read Bytes/sec", "_Total");
+                using var writeCounter = new PerformanceCounter("PhysicalDisk", "Disk Write Bytes/sec", "_Total");
+                metrics.Disk.ReadSpeed = readCounter.NextValue() / 1024 / 1024;
+                metrics.Disk.WriteSpeed = writeCounter.NextValue() / 1024 / 1024;
+            }
+            catch { }
+        }
+        else if (OperatingSystem.IsLinux())
+        {
+            try
+            {
+                foreach (var line in File.ReadLines("/proc/diskstats"))
+                {
+                    var parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                    if (parts.Length < 14) continue;
+                    var name = parts[2];
+                    if (!name.StartsWith("sd") && !name.StartsWith("hd") && !name.StartsWith("vd") && !name.StartsWith("nvme"))
+                        continue;
+                    ulong readSectors = ulong.Parse(parts[5]);
+                    ulong writeSectors = ulong.Parse(parts[9]);
+                    ulong ioMs = ulong.Parse(parts[12]);
+                    var sectorSize = 512UL;
+                    try
+                    {
+                        var ss = File.ReadAllText($"/sys/block/{name}/queue/hw_sector_size").Trim();
+                        sectorSize = ulong.Parse(ss);
+                    }
+                    catch { }
+                    if (_diskSnapshot.TryGetValue(name, out var prev))
+                    {
+                        var readBytes = (readSectors - prev.readSectors) * sectorSize;
+                        var writeBytes = (writeSectors - prev.writeSectors) * sectorSize;
+                        metrics.Disk.ReadSpeed += readBytes / 1024d / 1024d / (diskElapsedMs / 1000d);
+                        metrics.Disk.WriteSpeed += writeBytes / 1024d / 1024d / (diskElapsedMs / 1000d);
+                        var usage = (ioMs - prev.ioMs) / diskElapsedMs * 100;
+                        metrics.Disk.Usage = Math.Max(metrics.Disk.Usage, usage);
+                    }
+                    _diskSnapshot[name] = (readSectors, writeSectors, ioMs);
+                }
+            }
+            catch { }
         }
 
-        var now = DateTime.UtcNow;
+        _lastDiskSample = now;
+
         var elapsed = (now - _lastNetworkSample).TotalSeconds;
         if (elapsed <= 0) elapsed = 1;
         long totalSent = 0;
