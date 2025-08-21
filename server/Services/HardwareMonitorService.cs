@@ -31,6 +31,9 @@ public class HardwareMonitorService : IDisposable
     private readonly Queue<double> _gpuHistory = new();
     private readonly Dictionary<string, (ulong readSectors, ulong writeSectors, ulong ioMs)> _diskSnapshot = new();
     private DateTime _lastDiskSample = DateTime.UtcNow;
+    private readonly PerformanceCounter? _diskTimeCounter;
+    private readonly PerformanceCounter? _diskReadCounter;
+    private readonly PerformanceCounter? _diskWriteCounter;
 
     public HardwareMonitorService()
     {
@@ -43,6 +46,20 @@ public class HardwareMonitorService : IDisposable
             IsGpuEnabled = true
         };
         _computer.Open();
+
+        if (OperatingSystem.IsWindows())
+        {
+            try
+            {
+                _diskTimeCounter = new PerformanceCounter("PhysicalDisk", "% Disk Time", "_Total");
+                _diskReadCounter = new PerformanceCounter("PhysicalDisk", "Disk Read Bytes/sec", "_Total");
+                _diskWriteCounter = new PerformanceCounter("PhysicalDisk", "Disk Write Bytes/sec", "_Total");
+                _diskTimeCounter.NextValue();
+                _diskReadCounter.NextValue();
+                _diskWriteCounter.NextValue();
+            }
+            catch { }
+        }
     }
 
     private static IEnumerable<ISensor> EnumerateSensors(IHardware hardware)
@@ -184,12 +201,12 @@ public class HardwareMonitorService : IDisposable
         {
             try
             {
-                using var usageCounter = new PerformanceCounter("PhysicalDisk", "% Disk Time", "_Total");
-                metrics.Disk.Usage = usageCounter.NextValue();
-                using var readCounter = new PerformanceCounter("PhysicalDisk", "Disk Read Bytes/sec", "_Total");
-                using var writeCounter = new PerformanceCounter("PhysicalDisk", "Disk Write Bytes/sec", "_Total");
-                metrics.Disk.ReadSpeed = readCounter.NextValue() / 1024 / 1024;
-                metrics.Disk.WriteSpeed = writeCounter.NextValue() / 1024 / 1024;
+                if (_diskTimeCounter != null && _diskReadCounter != null && _diskWriteCounter != null)
+                {
+                    metrics.Disk.Usage = _diskTimeCounter.NextValue();
+                    metrics.Disk.ReadSpeed = _diskReadCounter.NextValue() / 1024 / 1024;
+                    metrics.Disk.WriteSpeed = _diskWriteCounter.NextValue() / 1024 / 1024;
+                }
             }
             catch { }
         }
@@ -453,7 +470,13 @@ public class HardwareMonitorService : IDisposable
         return metrics;
     }
 
-    public void Dispose() => _computer.Close();
+    public void Dispose()
+    {
+        _diskTimeCounter?.Dispose();
+        _diskReadCounter?.Dispose();
+        _diskWriteCounter?.Dispose();
+        _computer.Close();
+    }
 
     private static int GetPhysicalCoreCount()
     {
