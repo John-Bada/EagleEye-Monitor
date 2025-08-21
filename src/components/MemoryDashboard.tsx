@@ -94,12 +94,12 @@ const MemoryDashboard = () => {
             {
                 name: "System",
                 value: liveMetrics.memoryDistribution?.system ?? 0,
-                color: "hsl(var(--secondary))"
+                color: "hsla(122, 96%, 27%, 1.00)"
             },
             {
                 name: "Cache",
                 value: liveMetrics.memoryDistribution?.cache ?? 0,
-                color: "hsl(var(--accent))"
+                color: "hsla(284, 98%, 32%, 1.00)"
             },
             {
                 name: "Free",
@@ -200,10 +200,16 @@ const MemoryDashboard = () => {
                                         tickFormatter={(value) => new Date(value).toLocaleTimeString()}
                                     />
                                     <YAxis stroke="hsl(var(--muted-foreground))" />
-                                    <Tooltip />
-                                    <Line type="monotone" dataKey="physical" stroke="hsl(var(--primary))" strokeWidth={2} />
-                                    <Line type="monotone" dataKey="virtual" stroke="hsl(var(--secondary))" strokeWidth={2} />
-                                    <Line type="monotone" dataKey="cache" stroke="hsl(var(--accent))" strokeWidth={2} />
+                                       <Tooltip
+                                        contentStyle={{
+                                            backgroundColor: "hsl(var(--card))",
+                                            border: "1px solid hsl(var(--border))",
+                                            borderRadius: "8px"
+                                        }}
+                                    />
+                                    <Line type="monotone" dataKey="physical" stroke="hsl(195 100% 50%)" strokeWidth={2} />
+                                    <Line type="monotone" dataKey="virtual" stroke="hsl(0 75% 60%)" strokeWidth={2} />
+                                    <Line type="monotone" dataKey="cache" stroke="hsl(142 76% 55%)" strokeWidth={2} />
                                     <Line type="monotone" dataKey="swap" stroke="hsl(var(--warning))" strokeWidth={2} />
                                 </LineChart>
                             </ResponsiveContainer>
@@ -223,14 +229,21 @@ const MemoryDashboard = () => {
                                             <Cell key={`cell-${index}`} fill={entry.color} />
                                         ))}
                                     </Pie>
-                                    <Tooltip />
+                                     <Tooltip
+                                        contentStyle={{
+                                            backgroundColor: "hsla(58, 100%, 39%, 1.00)",
+                                            border: "1px solid hsl(var(--border))",
+                                            borderRadius: "8px"
+                                        }}
+                                    />
                                 </PieChart>
                             </ResponsiveContainer>
                             <div className="grid grid-cols-2 gap-2 mt-4">
                                 {distribution.map((type, index) => (
                                     <div key={index} className="flex items-center gap-2">
                                         <div className="w-3 h-3 rounded-full" style={{ backgroundColor: type.color }} />
-                                        <span className="text-sm">{type.name}: {type.value}%</span>
+                                        <span className="text-sm">{type.name}:{Math.round(type.value * 1000) / 1000}
+                                     %</span>
                                     </div>
                                 ))}
                             </div>
@@ -265,6 +278,7 @@ const MemoryDashboard = () => {
                                     </div>
                                 </div>
                             ))}
+                            
                         </div>
                     </CardContent>
                 </Card>

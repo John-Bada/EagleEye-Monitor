@@ -2,7 +2,8 @@
     ArrowLeft,
     Cpu,
     Thermometer,
-    Zap
+    Zap,
+    Clock
 } from "lucide-react";
 import {
     Card,
@@ -36,6 +37,7 @@ const CpuDashboard = () => {
         temperature: 0,
         frequency: 0,
         cores: 0,
+        threads: 0,
         processes: 0
     });
 
@@ -61,6 +63,7 @@ const CpuDashboard = () => {
             temperature: cpu.temperature,
             frequency: cpu.frequency,
             cores: cpu.cores,
+            threads: cpu.threads,
             processes: liveMetrics.processes
         });
         setCoreData(cpu.coreData ?? []);
@@ -141,6 +144,11 @@ const CpuDashboard = () => {
                             color: "hsl(var(--foreground))",
                             progress: cpuData.frequency,
                             max: 5
+                        },
+                        {
+                            label: "Threads",
+                            icon: <Clock className="h-4 w-4 text-muted-foreground" />,
+                            value: cpuData.threads.toString()
                         },
                         {
                             label: "Cores",
@@ -228,8 +236,8 @@ const CpuDashboard = () => {
                                             borderRadius: "8px"
                                         }}
                                     />
-                                    <Bar dataKey="usage" fill="hsl(var(--primary))" name="Usage %" />
-                                    <Bar dataKey="temperature" fill="hsl(var(--warning))" name="Temp °C" />
+                                    <Bar dataKey="usage" fill="hsla(116, 94%, 48%, 1.00)" name="Usage %" />
+                                    <Bar dataKey="temperature" fill="hsla(0, 83%, 47%, 1.00)" name="Temp °C" />
                                 </BarChart>
                             </ResponsiveContainer>
                         </CardContent>
