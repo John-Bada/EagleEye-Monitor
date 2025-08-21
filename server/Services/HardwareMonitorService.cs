@@ -336,6 +336,45 @@ public class HardwareMonitorService : IDisposable
         _lastProcessSample = now;
         metrics.Processes = processes.Length;
 
+        // Ensure total/available memory are populated even if sensors are missing
+        if (metrics.Memory.Total <= 0 || metrics.Memory.Available <= 0)
+        {
+            if (OperatingSystem.IsWindows())
+            {
+                try
+                {
+                    using var os = new ManagementObjectSearcher("select TotalVisibleMemorySize, FreePhysicalMemory from Win32_OperatingSystem");
+                    foreach (var mo in os.Get())
+                    {
+                        metrics.Memory.Total = Convert.ToDouble(mo["TotalVisibleMemorySize"]) / 1024 / 1024;
+                        metrics.Memory.Available = Convert.ToDouble(mo["FreePhysicalMemory"]) / 1024 / 1024;
+                        break;
+                    }
+                }
+                catch { }
+            }
+            else
+            {
+                try
+                {
+                    var lines = File.ReadAllLines("/proc/meminfo");
+                    double totalKb = 0, freeKb = 0;
+                    foreach (var line in lines)
+                    {
+                        if (line.StartsWith("MemTotal:"))
+                            totalKb = double.Parse(line.Split(':', 2)[1].Trim().Split(' ')[0]);
+                        else if (line.StartsWith("MemAvailable:"))
+                            freeKb = double.Parse(line.Split(':', 2)[1].Trim().Split(' ')[0]);
+                    }
+                    metrics.Memory.Total = totalKb / 1024 / 1024;
+                    metrics.Memory.Available = freeKb / 1024 / 1024;
+                }
+                catch { }
+            }
+            if (metrics.Memory.Total > 0)
+                metrics.Memory.Usage = (metrics.Memory.Total - metrics.Memory.Available) / metrics.Memory.Total * 100;
+        }
+
         // Detailed memory stats
         var physicalTotalGb = metrics.Memory.Total;
         var physicalFreeGb = metrics.Memory.Available;
