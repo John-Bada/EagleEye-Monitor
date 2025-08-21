@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net.NetworkInformation;
+using System.Net.Sockets;
 using System.Management;
 using EagleEyeMonitor.Server.Models;
 using LibreHardwareMonitor.Hardware;
@@ -14,6 +15,7 @@ public class HardwareMonitorService : IDisposable
     private readonly Computer _computer;
     private readonly UpdateVisitor _visitor = new();
     private readonly Dictionary<string, (long sent, long received)> _networkSnapshot = new();
+    private readonly Dictionary<string, (long sent, long received)> _networkBaseline = new();
     private readonly Dictionary<int, TimeSpan> _processSnapshot = new();
     private DateTime _lastNetworkSample = DateTime.UtcNow;
     private DateTime _lastProcessSample = DateTime.UtcNow;
@@ -23,6 +25,9 @@ public class HardwareMonitorService : IDisposable
     private readonly Queue<double> _memoryHistory = new();
     private readonly Queue<double> _diskHistory = new();
     private readonly Queue<double> _networkHistory = new();
+    private readonly Queue<double> _networkDownHistory = new();
+    private readonly Queue<double> _networkUpHistory = new();
+    private readonly Queue<double> _pingHistory = new();
     private readonly Queue<double> _gpuHistory = new();
 
     public HardwareMonitorService()
@@ -163,24 +168,71 @@ public class HardwareMonitorService : IDisposable
         var now = DateTime.UtcNow;
         var elapsed = (now - _lastNetworkSample).TotalSeconds;
         if (elapsed <= 0) elapsed = 1;
+        long totalSent = 0;
+        long totalRecv = 0;
         foreach (var nic in NetworkInterface.GetAllNetworkInterfaces())
         {
-            if (nic.NetworkInterfaceType == NetworkInterfaceType.Loopback || nic.OperationalStatus != OperationalStatus.Up)
+            if (nic.NetworkInterfaceType == NetworkInterfaceType.Loopback)
                 continue;
             var stats = nic.GetIPv4Statistics();
+            if (!_networkBaseline.ContainsKey(nic.Id))
+                _networkBaseline[nic.Id] = (stats.BytesSent, stats.BytesReceived);
             if (_networkSnapshot.TryGetValue(nic.Id, out var prev))
             {
                 var sent = stats.BytesSent - prev.sent;
                 var recv = stats.BytesReceived - prev.received;
-                metrics.Network.UploadSpeed += sent / elapsed;
-                metrics.Network.DownloadSpeed += recv / elapsed;
+                metrics.Network.UploadSpeed += sent * 8 / 1_000_000d / elapsed;
+                metrics.Network.DownloadSpeed += recv * 8 / 1_000_000d / elapsed;
                 var speed = nic.Speed <= 0 ? 1 : nic.Speed; // bits per second
                 var upPct = (sent * 8) / (speed * elapsed) * 100;
                 var downPct = (recv * 8) / (speed * elapsed) * 100;
                 metrics.Network.Usage = Math.Max(metrics.Network.Usage, Math.Max(upPct, downPct));
             }
             _networkSnapshot[nic.Id] = (stats.BytesSent, stats.BytesReceived);
+
+            var baseline = _networkBaseline[nic.Id];
+            totalSent += stats.BytesSent - baseline.sent;
+            totalRecv += stats.BytesReceived - baseline.received;
+
+            var ip = nic.GetIPProperties().UnicastAddresses
+                .FirstOrDefault(a => a.Address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)?.Address
+                .ToString() ?? string.Empty;
+            metrics.Network.Interfaces.Add(new NetworkInterfaceInfo
+            {
+                Name = nic.Name,
+                Status = nic.OperationalStatus == OperationalStatus.Up ? "Connected" : "Disconnected",
+                Speed = $"{nic.Speed / 1_000_000d:F0} Mbps",
+                Ip = ip
+            });
         }
+        metrics.Network.Data = new DataTransfer
+        {
+            Up = totalSent / 1024d / 1024d / 1024d,
+            Down = totalRecv / 1024d / 1024d / 1024d
+        };
+
+        try
+        {
+            using var ping = new Ping();
+            var reply = ping.Send("8.8.8.8", 1000);
+            if (reply.Status == IPStatus.Success)
+                metrics.Network.Ping = reply.RoundtripTime;
+        }
+        catch { }
+
+        var ipProps = IPGlobalProperties.GetIPGlobalProperties();
+        foreach (var conn in ipProps.GetActiveTcpConnections().Take(10))
+        {
+            metrics.Network.Connections.Add(new ConnectionInfo
+            {
+                Protocol = "TCP",
+                RemoteAddress = conn.RemoteEndPoint.Address.ToString(),
+                Port = conn.RemoteEndPoint.Port,
+                State = conn.State.ToString(),
+                Process = conn.LocalEndPoint.ToString()
+            });
+        }
+
         _lastNetworkSample = now;
 
         // Processes
@@ -274,6 +326,9 @@ public class HardwareMonitorService : IDisposable
         Enqueue(_memoryHistory, metrics.Memory.Usage);
         Enqueue(_diskHistory, metrics.Disk.Usage);
         Enqueue(_networkHistory, metrics.Network.Usage);
+        Enqueue(_networkDownHistory, metrics.Network.DownloadSpeed);
+        Enqueue(_networkUpHistory, metrics.Network.UploadSpeed);
+        Enqueue(_pingHistory, metrics.Network.Ping);
         Enqueue(_gpuHistory, metrics.Gpu.Usage);
         metrics.History = new PerformanceHistory
         {
@@ -283,6 +338,9 @@ public class HardwareMonitorService : IDisposable
             Memory = _memoryHistory.ToList(),
             Disk = _diskHistory.ToList(),
             Network = _networkHistory.ToList(),
+            NetworkDownload = _networkDownHistory.ToList(),
+            NetworkUpload = _networkUpHistory.ToList(),
+            Ping = _pingHistory.ToList(),
             Gpu = _gpuHistory.ToList()
         };
 

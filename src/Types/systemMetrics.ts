@@ -25,6 +25,16 @@ export type SystemMetrics = {
     usage: number;
     uploadSpeed: number;
     downloadSpeed: number;
+    ping: number;
+    data: { up: number; down: number };
+    interfaces: { name: string; status: string; speed: string; ip: string }[];
+    connections: {
+      protocol: string;
+      remoteAddress: string;
+      port: number;
+      state: string;
+      process: string;
+    }[];
   };
   gpu: {
     usage: number;
@@ -55,6 +65,9 @@ export type SystemMetrics = {
     memory: number[];
     disk: number[];
     network: number[];
+    networkDownload: number[];
+    networkUpload: number[];
+    ping: number[];
     gpu: number[];
   };
   timestamp: string;

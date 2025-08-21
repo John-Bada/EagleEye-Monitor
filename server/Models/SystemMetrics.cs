@@ -57,6 +57,33 @@ public class NetworkMetrics
     public double Usage { get; set; }
     public double UploadSpeed { get; set; }
     public double DownloadSpeed { get; set; }
+    public double Ping { get; set; }
+    public DataTransfer Data { get; set; } = new();
+    public List<NetworkInterfaceInfo> Interfaces { get; set; } = new();
+    public List<ConnectionInfo> Connections { get; set; } = new();
+}
+
+public class DataTransfer
+{
+    public double Up { get; set; }
+    public double Down { get; set; }
+}
+
+public class NetworkInterfaceInfo
+{
+    public string Name { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public string Speed { get; set; } = string.Empty;
+    public string Ip { get; set; } = string.Empty;
+}
+
+public class ConnectionInfo
+{
+    public string Protocol { get; set; } = string.Empty;
+    public string RemoteAddress { get; set; } = string.Empty;
+    public int Port { get; set; }
+    public string State { get; set; } = string.Empty;
+    public string Process { get; set; } = string.Empty;
 }
 
 public class GpuMetrics
@@ -107,5 +134,8 @@ public class PerformanceHistory
     public List<double> Memory { get; set; } = new();
     public List<double> Disk { get; set; } = new();
     public List<double> Network { get; set; } = new();
+    public List<double> NetworkDownload { get; set; } = new();
+    public List<double> NetworkUpload { get; set; } = new();
+    public List<double> Ping { get; set; } = new();
     public List<double> Gpu { get; set; } = new();
 }
