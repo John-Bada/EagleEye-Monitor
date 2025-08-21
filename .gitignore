@@ -1,0 +1,19 @@
+node_modules/
+/dist
+bin/
+obj/
+.env
+*.user
+*.log
+
+# Visual Studio
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# VS Code
+.vscode/
+
+# Mac
+.DS_Store
