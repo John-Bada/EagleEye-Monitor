@@ -29,6 +29,10 @@ export type SystemMetrics = {
   gpu: {
     usage: number;
     temperature: number;
+    memoryUsed: number;
+    memoryTotal: number;
+    power: number;
+    fanSpeed: number;
   };
   processes: number;
   topProcesses: {

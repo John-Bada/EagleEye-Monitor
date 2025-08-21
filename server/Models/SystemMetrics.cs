@@ -63,6 +63,10 @@ public class GpuMetrics
 {
     public double Usage { get; set; }
     public double Temperature { get; set; }
+    public double MemoryUsed { get; set; }
+    public double MemoryTotal { get; set; }
+    public double Power { get; set; }
+    public double FanSpeed { get; set; }
 }
 
 public class ProcessInfo

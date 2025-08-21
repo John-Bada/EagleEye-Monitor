@@ -140,6 +140,14 @@ public class HardwareMonitorService : IDisposable
                             metrics.Gpu.Usage = sensor.Value ?? 0;
                         else if (sensor.SensorType == SensorType.Temperature && sensor.Name.Contains("Core"))
                             metrics.Gpu.Temperature = sensor.Value ?? 0;
+                        else if ((sensor.SensorType == SensorType.SmallData || sensor.SensorType == SensorType.Data) && sensor.Name.Contains("Memory Used"))
+                            metrics.Gpu.MemoryUsed = sensor.Value ?? 0;
+                        else if ((sensor.SensorType == SensorType.SmallData || sensor.SensorType == SensorType.Data) && sensor.Name.Contains("Memory Total"))
+                            metrics.Gpu.MemoryTotal = sensor.Value ?? 0;
+                        else if (sensor.SensorType == SensorType.Power && sensor.Name.Contains("GPU"))
+                            metrics.Gpu.Power = sensor.Value ?? 0;
+                        else if (sensor.SensorType == SensorType.Fan && sensor.Name.Contains("GPU"))
+                            metrics.Gpu.FanSpeed = sensor.Value ?? 0;
                     }
                     break;
             }
