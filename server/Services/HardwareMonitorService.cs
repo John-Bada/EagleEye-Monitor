@@ -223,7 +223,8 @@ public class HardwareMonitorService : IDisposable
         var ipProps = IPGlobalProperties.GetIPGlobalProperties();
         foreach (var conn in ipProps.GetActiveTcpConnections().Take(10))
         {
-            metrics.Network.Connections.Add(new ConnectionInfo
+            // Disambiguate from Microsoft.AspNetCore.Http.ConnectionInfo
+            metrics.Network.Connections.Add(new Models.ConnectionInfo
             {
                 Protocol = "TCP",
                 RemoteAddress = conn.RemoteEndPoint.Address.ToString(),

@@ -4,7 +4,10 @@ import * as path from "path";
 import { componentTagger } from "lovable-tagger";
 
 export default defineConfig(({ mode }) => {
-    const apiUrl = process.env.VITE_API_BASE_URL || "http://localhost:5019";
+    // Default to IPv4 loopback to avoid Node resolving `localhost` to IPv6
+    // which can cause connection refusals when the .NET server only binds
+    // to IPv4. Consumers can still override this via VITE_API_BASE_URL.
+    const apiUrl = process.env.VITE_API_BASE_URL || "http://127.0.0.1:5019";
     return {
         plugins: [
             react(),
