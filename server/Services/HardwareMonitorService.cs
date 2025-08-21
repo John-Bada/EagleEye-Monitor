@@ -122,24 +122,43 @@ public class HardwareMonitorService : IDisposable
                     metrics.Cpu.Cores = GetPhysicalCoreCount();
                     var coreLoads = new List<ISensor>();
                     var coreTemps = new List<ISensor>();
-                    foreach (var sensor in hardware.Sensors)
+                    var clockSensors = new List<ISensor>();
+                    var packageTemp = 0d;
+                    foreach (var sensor in EnumerateSensors(hardware))
                     {
-                        if (sensor.SensorType == SensorType.Load && sensor.Name.Equals("CPU Total", StringComparison.OrdinalIgnoreCase))
-                            metrics.Cpu.Usage = sensor.Value ?? 0;
-                        else if (sensor.SensorType == SensorType.Temperature && sensor.Name.Contains("Package"))
-                            metrics.Cpu.Temperature = sensor.Value ?? 0;
-                        else if (sensor.SensorType == SensorType.Clock && sensor.Name.Contains("Core"))
-                            metrics.Cpu.Frequency += sensor.Value ?? 0;
-                        else if (sensor.SensorType == SensorType.Load && sensor.Name.Contains("Core #"))
-                            coreLoads.Add(sensor);
-                        else if (sensor.SensorType == SensorType.Temperature && sensor.Name.Contains("Core #"))
-                            coreTemps.Add(sensor);
+                        var name = sensor.Name;
+                        switch (sensor.SensorType)
+                        {
+                            case SensorType.Load when name.Equals("CPU Total", StringComparison.OrdinalIgnoreCase):
+                                metrics.Cpu.Usage = sensor.Value ?? 0;
+                                break;
+                            case SensorType.Temperature:
+                                if (name.Contains("Package", StringComparison.OrdinalIgnoreCase) || name.Contains("CPU", StringComparison.OrdinalIgnoreCase))
+                                    packageTemp = Math.Max(packageTemp, sensor.Value ?? 0);
+                                else if (name.Contains("Core #", StringComparison.OrdinalIgnoreCase))
+                                    coreTemps.Add(sensor);
+                                break;
+                            case SensorType.Clock when name.Contains("Core", StringComparison.OrdinalIgnoreCase):
+                                clockSensors.Add(sensor);
+                                break;
+                            case SensorType.Load when name.Contains("Core #", StringComparison.OrdinalIgnoreCase):
+                                coreLoads.Add(sensor);
+                                break;
+                        }
                     }
-                    if (metrics.Cpu.Cores > 0)
-                        metrics.Cpu.Frequency /= metrics.Cpu.Cores;
+
+                    if (clockSensors.Count > 0)
+                        metrics.Cpu.Frequency = clockSensors.Average(s => s.Value ?? 0) / 1000.0;
+
+                    if (packageTemp > 0)
+                        metrics.Cpu.Temperature = packageTemp;
+                    else if (coreTemps.Count > 0)
+                        metrics.Cpu.Temperature = coreTemps.Max(t => t.Value ?? 0);
+
                     foreach (var load in coreLoads)
                     {
-                        var temp = coreTemps.FirstOrDefault(t => t.Name.EndsWith(load.Name.Substring(load.Name.IndexOf('#'))));
+                        var suffix = load.Name.Substring(load.Name.IndexOf('#'));
+                        var temp = coreTemps.FirstOrDefault(t => t.Name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase));
                         metrics.Cpu.CoreData.Add(new CpuCoreMetrics
                         {
                             Core = load.Name.Replace("CPU ", string.Empty),
