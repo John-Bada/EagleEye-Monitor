@@ -6,6 +6,7 @@ var builder = WebApplication.CreateBuilder(args);
 // Services
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<HardwareMonitorService>();
+builder.Services.AddHostedService<MetricsBroadcaster>();
 builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>
