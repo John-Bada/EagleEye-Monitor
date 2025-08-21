@@ -23,7 +23,6 @@ public class CpuMetrics
     public double Temperature { get; set; }
     public double Frequency { get; set; }
     public int Cores { get; set; }
-    public int Threads { get; set; }
     public List<CpuCoreMetrics> CoreData { get; set; } = new();
 }
 

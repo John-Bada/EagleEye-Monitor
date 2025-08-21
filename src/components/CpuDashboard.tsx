@@ -2,8 +2,7 @@
     ArrowLeft,
     Cpu,
     Thermometer,
-    Zap,
-    Clock
+    Zap
 } from "lucide-react";
 import {
     Card,
@@ -37,7 +36,6 @@ const CpuDashboard = () => {
         temperature: 0,
         frequency: 0,
         cores: 0,
-        threads: 0,
         processes: 0
     });
 
@@ -63,7 +61,6 @@ const CpuDashboard = () => {
             temperature: cpu.temperature,
             frequency: cpu.frequency,
             cores: cpu.cores,
-            threads: cpu.threads,
             processes: liveMetrics.processes
         });
         setCoreData(cpu.coreData ?? []);
@@ -144,11 +141,6 @@ const CpuDashboard = () => {
                             color: "hsl(var(--foreground))",
                             progress: cpuData.frequency,
                             max: 5
-                        },
-                        {
-                            label: "Threads",
-                            icon: <Clock className="h-4 w-4 text-muted-foreground" />,
-                            value: cpuData.threads.toString()
                         },
                         {
                             label: "Cores",
