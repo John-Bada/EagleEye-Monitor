@@ -121,6 +121,10 @@ const Dashboard = () => {
         </Card>
     );
 
+    const xTicks = metrics
+        .filter((_, i) => i % 2 === 0)
+        .map(m => m.timestamp);
+
     return (
         <div className="p-6 space-y-6">
             <div className="flex items-center justify-between">
@@ -158,6 +162,7 @@ const Dashboard = () => {
                                     type="number"
                                     domain={['dataMin', 'dataMax']}
                                     scale="time"
+                                    ticks={xTicks}
                                     tickFormatter={(value) => new Date(value).toLocaleTimeString()}
                                     stroke="hsl(var(--muted-foreground))"
                                     fontSize={12}

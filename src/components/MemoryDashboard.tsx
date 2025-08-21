@@ -38,7 +38,7 @@ interface MemoryData {
 }
 
 interface HistoricalMemory {
-    time: string;
+    timestamp: number;
     physical: number;
     virtual: number;
     cache: number;
@@ -111,7 +111,7 @@ const MemoryDashboard = () => {
         setHistoricalData(prev => [
             ...prev.slice(-59),
             {
-                time: new Date().toLocaleTimeString(),
+                timestamp: Date.now(),
                 physical: memory.physical?.percentage ?? 0,
                 virtual: memory.virtual?.percentage ?? 0,
                 cache: memory.cache?.percentage ?? 0,
@@ -125,6 +125,10 @@ const MemoryDashboard = () => {
         if (percentage < 80) return "hsl(var(--warning))";
         return "hsl(var(--destructive))";
     };
+
+    const historyTicks = historicalData
+        .filter((_, i) => i % 2 === 0)
+        .map(d => d.timestamp);
 
     const renderMemoryCard = (
         title: string,
@@ -186,7 +190,15 @@ const MemoryDashboard = () => {
                             <ResponsiveContainer width="100%" height={300}>
                                 <LineChart data={historicalData}>
                                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                                    <XAxis dataKey="time" stroke="hsl(var(--muted-foreground))" />
+                                    <XAxis
+                                        dataKey="timestamp"
+                                        type="number"
+                                        domain={['dataMin', 'dataMax']}
+                                        scale="time"
+                                        ticks={historyTicks}
+                                        stroke="hsl(var(--muted-foreground))"
+                                        tickFormatter={(value) => new Date(value).toLocaleTimeString()}
+                                    />
                                     <YAxis stroke="hsl(var(--muted-foreground))" />
                                     <Tooltip />
                                     <Line type="monotone" dataKey="physical" stroke="hsl(var(--primary))" strokeWidth={2} />
