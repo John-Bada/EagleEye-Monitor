@@ -43,6 +43,19 @@ public class HardwareMonitorService : IDisposable
         _computer.Open();
     }
 
+    private static IEnumerable<ISensor> EnumerateSensors(IHardware hardware)
+    {
+        foreach (var sensor in hardware.Sensors)
+            yield return sensor;
+
+        foreach (var sub in hardware.SubHardware)
+        {
+            sub.Update();
+            foreach (var sensor in EnumerateSensors(sub))
+                yield return sensor;
+        }
+    }
+
     public SystemMetrics GetMetrics()
     {
         _computer.Accept(_visitor);
@@ -139,20 +152,30 @@ public class HardwareMonitorService : IDisposable
                 case HardwareType.GpuNvidia:
                 case HardwareType.GpuAmd:
                 case HardwareType.GpuIntel:
-                    foreach (var sensor in hardware.Sensors)
+                    foreach (var sensor in EnumerateSensors(hardware))
                     {
-                        if (sensor.SensorType == SensorType.Load && (sensor.Name.Contains("Core") || sensor.Name.Contains("GPU")))
-                            metrics.Gpu.Usage = sensor.Value ?? 0;
-                        else if (sensor.SensorType == SensorType.Temperature && sensor.Name.Contains("Core"))
-                            metrics.Gpu.Temperature = sensor.Value ?? 0;
-                        else if ((sensor.SensorType == SensorType.SmallData || sensor.SensorType == SensorType.Data) && sensor.Name.Contains("Memory Used"))
-                            metrics.Gpu.MemoryUsed = sensor.Value ?? 0;
-                        else if ((sensor.SensorType == SensorType.SmallData || sensor.SensorType == SensorType.Data) && sensor.Name.Contains("Memory Total"))
-                            metrics.Gpu.MemoryTotal = sensor.Value ?? 0;
-                        else if (sensor.SensorType == SensorType.Power && sensor.Name.Contains("GPU"))
-                            metrics.Gpu.Power = sensor.Value ?? 0;
-                        else if (sensor.SensorType == SensorType.Fan && sensor.Name.Contains("GPU"))
-                            metrics.Gpu.FanSpeed = sensor.Value ?? 0;
+                        var name = sensor.Name.ToLowerInvariant();
+                        switch (sensor.SensorType)
+                        {
+                            case SensorType.Load when name.Contains("core") || name.Contains("gpu"):
+                                metrics.Gpu.Usage = sensor.Value ?? metrics.Gpu.Usage;
+                                break;
+                            case SensorType.Temperature when name.Contains("core") || name.Contains("gpu"):
+                                metrics.Gpu.Temperature = sensor.Value ?? metrics.Gpu.Temperature;
+                                break;
+                            case SensorType.SmallData or SensorType.Data when name.Contains("memory used") || name.Contains("used memory"):
+                                metrics.Gpu.MemoryUsed = (sensor.Value ?? 0) / 1024.0;
+                                break;
+                            case SensorType.SmallData or SensorType.Data when name.Contains("memory total") || name.Contains("total memory"):
+                                metrics.Gpu.MemoryTotal = (sensor.Value ?? 0) / 1024.0;
+                                break;
+                            case SensorType.Power when name.Contains("gpu"):
+                                metrics.Gpu.Power = sensor.Value ?? metrics.Gpu.Power;
+                                break;
+                            case SensorType.Fan when name.Contains("gpu"):
+                                metrics.Gpu.FanSpeed = sensor.Value ?? metrics.Gpu.FanSpeed;
+                                break;
+                        }
                     }
                     break;
             }
